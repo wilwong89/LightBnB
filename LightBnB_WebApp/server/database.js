@@ -16,23 +16,23 @@ const pool = new Pool({
  * @param {String} email The email of the user.
  * @return {Promise<{}>} A promise to the user.
  */
-const getUserWithEmail = function (email) {
+const getUserWithEmail = function(email) {
   const tempQuery = `
     SELECT *
     FROM users
     WHERE email = $1
   `;
-  console.log("getUserWithEmail", email)
+  console.log("getUserWithEmail", email);
   if (!email) {
-    return Promise.reject(null)
+    return Promise.reject(null);
   } else {
     return pool
       .query(tempQuery, [email])
       .then(res => res.rows)
       .catch(err => {
-        console.log(err)
-        return null
-      })
+        console.log(err);
+        return null;
+      });
   }
 };
 exports.getUserWithEmail = getUserWithEmail;
@@ -42,26 +42,26 @@ exports.getUserWithEmail = getUserWithEmail;
  * @param {string} id The id of the user.
  * @return {Promise<{}>} A promise to the user.
  */
-const getUserWithId = function (id) {
+const getUserWithId = function(id) {
   const tempQuery = `
     SELECT *
     FROM users
     WHERE id = $1
   `;
-  console.log("getUserWithEmail", id)
+  console.log("getUserWithEmail", id);
   if (!id) {
-    return Promise.reject("Missing id")
+    return Promise.reject("Missing id");
   } else {
     return pool
       .query(tempQuery, [id])
       .then(res => {
-        console.log("getUserWithId", res)
-        return res.rows
+        console.log("getUserWithId", res);
+        return res.rows;
       })
       .catch(err => {
-        console.log(err)
-        return null
-      })
+        console.log(err);
+        return null;
+      });
   }
 };
 exports.getUserWithId = getUserWithId;
@@ -71,29 +71,29 @@ exports.getUserWithId = getUserWithId;
  * @param {{name: string, password: string, email: string}} user
  * @return {Promise<{}>} A promise to the user.
  */
-const addUser = function (user) {
+const addUser = function(user) {
   const { name, password, email } = user;
   const tempQuery = `
     INSERT INTO users(name, email, password) VALUES($1, $2, $3) RETURNING *`;
 
   if (!(name && password && email)) {
-    return Promise.reject("Missing name, password, or email")
+    return Promise.reject("Missing name, password, or email");
   } else {
     getUserWithEmail(email)
-      .then((result) => {
+      .then(result => {
         if (result.length) {
           return pool
             .query(tempQuery, [name, email, password])
             .then(res => res.rows)
             .catch(err => {
-              console.log(err)
-              return null
-            })
+              console.log(err);
+              return null;
+            });
         } else {
-          return "User already exists"
+          return "User already exists";
         }
       })
-      .catch(err => err)
+      .catch(err => err);
   }
   // const userId = Object.keys(users).length + 1;
   // user.id = userId;
@@ -109,24 +109,24 @@ exports.addUser = addUser;
  * @param {string} guest_id The id of the user.
  * @return {Promise<[{}]>} A promise to the reservations.
  */
-const getAllReservations = function (guest_id, limit = 10) {
+const getAllReservations = function(guest_id, limit = 10) {
   const tempQuery = `
     SELECT * FROM reservations
     WHERE guest_id = $1;`;
 
   if (!(guest_id, limit)) {
-    return Promise.reject("Missing guest_id or limit")
+    return Promise.reject("Missing guest_id or limit");
   } else {
     return pool
       .query(tempQuery, [limit])
       .then(res => {
-        console.log("getAllReservations", res)
-        return res.rows
+        console.log("getAllReservations", res);
+        return res.rows;
       })
       .catch(err => {
-        console.log(err)
-        return null
-      })
+        console.log(err);
+        return null;
+      });
   }
   // return getAllProperties(null, 2);
 };
@@ -140,33 +140,71 @@ exports.getAllReservations = getAllReservations;
  * @param {*} limit The number of results to return.
  * @return {Promise<[{}]>}  A promise to the properties.
  */
-const getAllProperties = function (options, limit = 10) {
-  let tempQuery = `
-    SELECT *
-    FROM properties
-    LIMIT $1
+const getAllProperties = function(options, limit = 10) {
+  // 1
+  const queryParams = [];
+  // 2
+  let queryString = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
   `;
-  console.log("getAllProperties", options)
-  return pool
-    .query(tempQuery, [limit])
-    .then(res => res.rows)
-    .catch(err => err);
 
-  // return new Promise(function(resolve, reject) {
-  //   pool
-  //     .query(tempQuery, values)
-  //     .then(res => {
-  //       res.rows.forEach(property => {
-  //         console.log(property);
-  //         resolve(property);
-  //       });
-  //       // console.log(res.rows[0]);
-  //     })
-  //     .catch(err => {
-  //       console.log(err);
-  //       reject(err);
-  //     });
-  // });
+  // 3
+  if (
+    options.city ||
+    options.owner_id ||
+    options.minimum_rating ||
+    (options.minimum_price_per_night && maximum_price_per_night)
+  ) {
+    queryString += `WHERE `;
+
+    if (options.city) {
+      queryParams.push(`%${options.city}%`);
+      queryString += `city LIKE $${queryParams.length} `;
+    }
+
+    if (options.owner_id) {
+      if (queryParams.length) {
+        queryString += `AND `;
+      }
+      queryParams.push(`%${options.owner_id}%`);
+      queryString += `owner_id = $${queryParams.length} `;
+    }
+
+    if (options.minimum_rating) {
+      if (queryParams.length) {
+        queryString += `AND `;
+      }
+      queryParams.push(`%${options.minimum_rating}%`);
+      queryString += `minimum_rating >= $${queryParams.length} `;
+    }
+
+    if (options.minimum_price_per_night && options.maximum_price_per_night) {
+      if (queryParams.length) {
+        queryString += `AND `;
+      }
+      queryParams.push(`%${options.minimum_rating}%`);
+      queryString += `minimum_price_per_night >= $${queryParams.length} `;
+
+      queryParams.push(`%${options.maximum_price_per_night}%`);
+      queryString += `AND maximum_price_per_night <= $${queryParams.length} `;
+    }
+  }
+
+  // 4
+  queryParams.push(limit);
+  queryString += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+
+  // 5
+  console.log(queryString, queryParams);
+
+  // 6
+  return pool.query(queryString, queryParams).then(res => res.rows);
 };
 exports.getAllProperties = getAllProperties;
 
@@ -181,7 +219,7 @@ exports.getAllProperties = getAllProperties;
  * @param {{}} property An object containing all of the property details.
  * @return {Promise<{}>} A promise to the property.
  */
-const addProperty = function (property) {
+const addProperty = function(property) {
   const propertyId = Object.keys(properties).length + 1;
   property.id = propertyId;
   properties[propertyId] = property;
